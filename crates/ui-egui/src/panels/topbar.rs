@@ -60,7 +60,7 @@ fn nav_buttons(app: &mut LightcraftApp, ui: &mut egui::Ui, search_left: f32) {
         {
             let _ = app.run("view.leftPanel", json!({}));
         }
-        ui.add_space(8.0;
+        ui.add_space(8.0);
         if icon_button(ui, "back", Icon::Back, vec2(30.0, 30.0), false, true, crate::i18n::tr("Back")).clicked() {
             let _ = app.run("view.back", json!({}));
         }
