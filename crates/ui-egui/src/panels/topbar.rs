@@ -8,29 +8,19 @@ use crate::icons::{Icon, paint};
 use crate::theme::Tokens;
 use crate::widgets::{icon_button, register};
 
-/// The bar doubles as the window's title bar: dragging its empty space moves the window and a
-/// double-click acts as the system setting says. Made before the bar's widgets so they win the click.
 fn window_handle(ui: &mut egui::Ui, bar: Rect) {
     register(ui, "region:titlebar", bar);
     let resp = craft_window::title_bar::empty_area(ui, bar);
     crate::widgets::announce(&resp, crate::i18n::tr("Title bar"));
 }
 
-/// Draw the top bar: the titlebar drag area, the in-window menus when there is no native menu
-/// bar, sidebar and back/forward buttons, the centred search field, the filter button with its
-/// active count, and the right-side action icons.
 pub fn show(app: &mut LightcraftApp, ui: &mut egui::Ui) {
     let t = Tokens::get(ui.ctx());
-    // room for the traffic lights; in full screen they are gone, and the sidebar button sits as far
-    // from the left edge as the Discord button from the right (12 margin + 4)
     let left = match (app.integrated_titlebar, app.window_is_fullscreen) {
         (true, false) => 78,
         (true, true) => 16,
         (false, _) => 10,
     };
-    // A dialog fades the disabled bar's controls, and its fill with them. A sheet leaves the title bar's
-    // color alone (the window buttons the OS draws over it stay lit), so the fill is painted unfaded
-    // beneath, in a slot reserved before the bar's own shapes.
     let sheet = app.integrated_titlebar && !app.window_is_fullscreen && app.ui.dialog.is_some();
     let slot = sheet.then(|| ui.ctx().layer_painter(ui.layer_id()).add(egui::Shape::Noop));
     let fill = if sheet { egui::Color32::TRANSPARENT } else { t.chrome };
@@ -40,16 +30,9 @@ pub fn show(app: &mut LightcraftApp, ui: &mut egui::Ui) {
         .show(ui, |ui| {
             crate::widgets::announce_region(ui, egui::accesskit::Role::Toolbar, crate::i18n::tr("Top bar"));
             let full = ui.max_rect();
-            // The whole bar, its margins included. The search field is centred on this and not on
-            // `full`, which is only what the margins leave: on macOS the left margin holds the
-            // traffic lights' room, and full screen gives that room back. Centring on `full` moved
-            // the field, and changed its width, every time that room changed (issue #2365).
             let bar = Rect::from_min_max(pos2(full.left() - left as f32, full.top()), pos2(full.right() + 12.0, full.bottom()));
-            // The field stops short of the filter icon and the seven icons on the right; centred,
-            // it is twice the room between the window's centre and them.
             let mut sw = 640.0f32.min(2.0 * (full.right() - 310.0 - bar.center().x)).max(190.0);
             if !app.native_menu {
-                // leave room for the in-window menus left of the (centred) search field
                 let menus_right = full.left() + 140.0 + crate::menubar::bar_width(ui) + 24.0;
                 sw = sw.min(2.0 * (bar.center().x - menus_right)).max(190.0);
             }
@@ -69,7 +52,6 @@ pub fn show(app: &mut LightcraftApp, ui: &mut egui::Ui) {
     }
 }
 
-/// Sidebar toggle, back/forward and, without a native menu bar, the in-window menus.
 fn nav_buttons(app: &mut LightcraftApp, ui: &mut egui::Ui, search_left: f32) {
     ui.horizontal_centered(|ui| {
         ui.spacing_mut().item_spacing.x = 4.0;
@@ -78,13 +60,12 @@ fn nav_buttons(app: &mut LightcraftApp, ui: &mut egui::Ui, search_left: f32) {
         {
             let _ = app.run("view.leftPanel", json!({}));
         }
-        ui.add_space(8.0);
+        ui.add_space(8.0;
         if icon_button(ui, "back", Icon::Back, vec2(30.0, 30.0), false, true, crate::i18n::tr("Back")).clicked() {
             let _ = app.run("view.back", json!({}));
         }
         icon_button(ui, "forward", Icon::Forward, vec2(30.0, 30.0), false, false, crate::i18n::tr("Forward"));
         if !app.native_menu {
-            // no native menu bar (web, Windows, Linux): menus in the top bar
             ui.add_space(10.0);
             let room = search_left - ui.cursor().left() - 16.0;
             crate::menubar::show_in_window(app, ui, room);
@@ -92,9 +73,7 @@ fn nav_buttons(app: &mut LightcraftApp, ui: &mut egui::Ui, search_left: f32) {
     });
 }
 
-/// The centred search field with its placeholder and focus ring.
 fn search_field(app: &mut LightcraftApp, ui: &mut egui::Ui, t: &Tokens, sr: Rect) {
-    // search field (centred on the window)
     let id = crate::text_field::id("field:search");
     if std::mem::take(&mut app.ui.focus_search) {
         ui.memory_mut(|m| m.request_focus(id));
@@ -131,9 +110,7 @@ fn search_field(app: &mut LightcraftApp, ui: &mut egui::Ui, t: &Tokens, sr: Rect
     }
 }
 
-/// The filter icon beside the search field, with the active-filter badge.
 fn filter_button(app: &mut LightcraftApp, ui: &mut egui::Ui, t: &Tokens, sr: Rect) {
-    // filter icon right of the search field
     let fr = Rect::from_center_size(pos2(sr.right() + 22.0, sr.center().y), vec2(28.0, 28.0));
     let fresp = ui.interact(fr, egui::Id::unique("filter-btn"), Sense::click());
     crate::widgets::announce(&fresp, crate::i18n::tr("Filters"));
@@ -151,7 +128,6 @@ fn filter_button(app: &mut LightcraftApp, ui: &mut egui::Ui, t: &Tokens, sr: Rec
             t.icon
         },
     );
-    // badge: how many filters are on, even with the filter bar closed
     let active = lightcraft_engine::filter_chips(&app.session.filter, &app.session.catalog).len();
     if active > 0 {
         let c = fr.right_top() + vec2(-3.0, 8.0);
@@ -168,21 +144,17 @@ fn filter_button(app: &mut LightcraftApp, ui: &mut egui::Ui, t: &Tokens, sr: Rec
     }
 }
 
-/// The right-side action icons; returns the x where the next icon would go.
 fn right_icons(app: &mut LightcraftApp, ui: &mut egui::Ui, t: &Tokens, full: Rect) -> f32 {
-    // right icons
     let mut x = full.right() - 18.0;
-    // saving is failing: a warning shows until a save succeeds (nothing is shown otherwise)
     let unsaved = app.session.unsaved().map(|(n, e)| unsaved_tip(n, e));
     let cloud_tip = unsaved.as_deref().unwrap_or_default();
-    // Import Photos… beside Export, always one click away, with the key it is bound to now
     let mac = ui.ctx().os() == egui::os::OperatingSystem::Mac;
     let import_tip = match crate::shortcuts::shortcut_of(&app.ui.settings.keymap, "file.addPhotos") {
         Some(sc) => format!("{} ({})", crate::i18n::tr("Import Photos…"), crate::menubar::shortcut_text(sc, mac)),
         None => crate::i18n::tr("Import Photos…").to_string(),
     };
     for (id, icon, tip, cmd) in [
-        ("discord", Icon::Chat, "Join the ArtCraft community on Discord", "app.discord"),
+        ("discord", Icon::Chat, "Open The AllCraft Studio", "app.artcraft"),
         ("cloud", Icon::Cloud, cloud_tip, ""),
         ("help", Icon::Help, "Keyboard shortcuts", "app.shortcuts"),
         ("share", Icon::Share, "Export", "dialog.export"),
@@ -214,7 +186,6 @@ fn right_icons(app: &mut LightcraftApp, ui: &mut egui::Ui, t: &Tokens, full: Rec
             ui.painter().text(c, Align2::CENTER_CENTER, "!", t.semibold(9.5), t.canvas);
             register(ui, "indicator:unsaved", r);
         }
-        // a refusal says why (Import while a Lightroom catalog is coming in)
         if resp.clicked()
             && !cmd.is_empty()
             && let Err(e) = app.run(cmd, json!({}))
@@ -226,9 +197,7 @@ fn right_icons(app: &mut LightcraftApp, ui: &mut egui::Ui, t: &Tokens, full: Rec
     x
 }
 
-/// The appearance icon at `x`, with its theme-favourites menu.
 fn appearance_button(app: &mut LightcraftApp, ui: &mut egui::Ui, t: &Tokens, full: Rect, x: f32) {
-    // Appearance Mode: a click steps Auto → Light → Dark → Auto; the icon shows the mode
     let (icon, mode) = appearance_icon(app.ui.settings.appearance_mode);
     let r = Rect::from_center_size(pos2(x, full.center().y), vec2(28.0, 28.0));
     let tip = format!("{}: {}", crate::i18n::tr("Appearance Mode"), crate::i18n::tr(mode));
@@ -265,7 +234,6 @@ fn appearance_button(app: &mut LightcraftApp, ui: &mut egui::Ui, t: &Tokens, ful
     });
 }
 
-/// The appearance button's icon and the mode's name for its tooltip.
 pub fn appearance_icon(mode: crate::state::AppearanceMode) -> (Icon, &'static str) {
     use crate::state::AppearanceMode;
     match mode {
@@ -275,7 +243,6 @@ pub fn appearance_icon(mode: crate::state::AppearanceMode) -> (Icon, &'static st
     }
 }
 
-/// Tooltip for the warning cloud icon: `n` changes held in memory because saving failed with `e`.
 fn unsaved_tip(n: usize, e: &str) -> String {
     let s = crate::i18n::plural_s(n);
     let it = if n == 1 { "it" } else { "them" };
